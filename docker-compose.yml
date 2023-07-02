@@ -1,0 +1,74 @@
+version: '4.1'
+
+networks:
+  graylog:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "true"
+
+services:
+  mongodb:
+    image: mongo:latest
+    volumes:
+      - ./graylog.js:/docker-entrypoint-initdb.d/grayloguser.js
+    restart: always
+    networks:
+      - graylog
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: secret
+      MONGO_INITDB_ROOT_DATABASE: graylog
+      MONGO_INITDB_DATABASE_USERNAME: graylog
+      MONGO_INITDB_DATABASE_PASSWORD: secret
+    ports:
+      - "27017:27017"
+    expose:
+      - 27017
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch-oss:7.10.2
+    environment:
+      - cluster.name=elasticsearch
+      - http.host=0.0.0.0
+      - transport.host=localhost
+      - network.host=0.0.0.0
+      - "ES_JAVA_OPTS=-Dlog4j2.formatMsgNoLookups=true -Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    ports:
+      - "9200:9200"
+    expose:
+      - 9200
+    networks:
+      - graylog
+  graylog:
+    image: graylog/graylog:4.1
+    environment:
+      - GRAYLOG_PASSWORD_SECRET=mfyz11sanane22banane
+      # Password: admin
+      - GRAYLOG_ROOT_PASSWORD_SHA2=8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918
+      - GRAYLOG_HTTP_EXTERNAL_URI=http://127.0.0.1:9000/
+      - GRAYLOG_MONGODB_URI=mongodb://graylog:vWGzncmBe9@host.docker.internal:27017/graylog
+      - GRAYLOG_MONGO_INITDB_ROOT_USERNAME=graylog
+      - GRAYLOG_MONGO_INITDB_ROOT_PASSWORD=vWGzncmBe9
+      - GRAYLOG_MONGO_INITDB_ROOT_DATABASE=graylog
+      - GRAYLOG_ELASTICSEARCH_HOSTS=http://host.docker.internal:9200/
+    restart: always
+    links:
+      - mongodb:mongo
+      - elasticsearch:elasticsearch
+    depends_on:
+      - mongodb
+      - elasticsearch
+    ports:
+      - 9000:9000 # Graylog web interface and REST API
+      - 5555:5555 # Raw/Plaintext TCP
+      - 1514:1514 # Syslog TCP
+      - 1514:1514/udp # Syslog UDP
+      - 12201:12201 # GELF TCP
+      - 12201:12201/udp # GELF UDP
